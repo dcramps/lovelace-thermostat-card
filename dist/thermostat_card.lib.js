@@ -63,18 +63,13 @@ export default class ThermostatUI {
     root.appendChild(this._buildText(config.radius, 'target', 0));
     root.appendChild(this._buildText(config.radius, 'low', -config.radius / 2.5));
     root.appendChild(this._buildText(config.radius, 'high', config.radius / 3));
-    root.appendChild(this._buildChevrons(config.radius, 0, 'low', 0.7, -config.radius / 2.5));
-    root.appendChild(this._buildChevrons(config.radius, 0, 'high', 0.7, config.radius / 3));
-    root.appendChild(this._buildChevrons(config.radius, 0, 'target', 1, 0));
-    root.appendChild(this._buildChevrons(config.radius, 180, 'low', 0.7, -config.radius / 2.5));
-    root.appendChild(this._buildChevrons(config.radius, 180, 'high', 0.7, config.radius / 3));
-    root.appendChild(this._buildChevrons(config.radius, 180, 'target', 1, 0));
 
 
     this.c_body.appendChild(root);
     this._container.appendChild(this.c_body);
     this._root = root;
     this._buildControls(config.radius);
+    this._setupDragToSet(config.radius);
     this._root.addEventListener('click', () => this._enableControls());
     this._container.appendChild(this._buildDialog());
     this._main_icon.addEventListener('click', () => this._openDialog());
@@ -585,6 +580,142 @@ export default class ThermostatUI {
       this._root.appendChild(path);
       startAngle = startAngle + angle;
     }
+  }
+
+  _setupDragToSet(radius) {
+    this._isDragging = false;
+    
+    const getEventPosition = (e) => {
+      if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+      return { x: e.clientX, y: e.clientY };
+    };
+
+    const getAngleFromPosition = (x, y) => {
+      const rect = this._root.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      
+      const dx = x - centerX;
+      const dy = y - centerY;
+      
+      // Calculate angle in degrees (0 = right, 90 = down, etc.)
+      let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      
+      // Convert to our coordinate system (0 = top, clockwise positive)
+      angle = angle + 90;
+      if (angle < 0) angle += 360;
+      
+      return angle;
+    };
+
+    const angleToTemperature = (angle) => {
+      const config = this._config;
+      // The dial starts at offset_degrees and spans tick_degrees
+      // offset_degrees = 180 - (360 - tick_degrees) / 2
+      // For tick_degrees = 300, offset_degrees = 150
+      // The arc goes from (270 - offset_degrees) to (270 - offset_degrees + tick_degrees)
+      // Which is 120 to 420 (or 120 to 60 wrapping around)
+      
+      const startAngle = 270 - config.offset_degrees;  // Where min temp is
+      let normalizedAngle = angle - startAngle;
+      
+      // Handle wrap-around
+      if (normalizedAngle < 0) normalizedAngle += 360;
+      if (normalizedAngle > 360) normalizedAngle -= 360;
+      
+      // If angle is beyond the dial range, clamp it
+      if (normalizedAngle > config.tick_degrees) {
+        // Determine if closer to start or end
+        const distToStart = normalizedAngle > 180 ? 360 - normalizedAngle : normalizedAngle;
+        const distToEnd = Math.abs(normalizedAngle - config.tick_degrees);
+        normalizedAngle = distToStart < distToEnd ? 0 : config.tick_degrees;
+      }
+      
+      // Convert to temperature
+      const tempRange = this.max_value - this.min_value;
+      let temp = this.min_value + (normalizedAngle / config.tick_degrees) * tempRange;
+      
+      // Round to step
+      temp = Math.round(temp / config.step) * config.step;
+      
+      // Clamp to valid range
+      return SvgUtil.restrictToRange(temp, this.min_value, this.max_value);
+    };
+
+    const handleDragStart = (e) => {
+      // Only start drag if clicking on the dial area (not on buttons, etc.)
+      const pos = getEventPosition(e);
+      const rect = this._root.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const dx = pos.x - centerX;
+      const dy = pos.y - centerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dialRadius = rect.width / 2;
+      
+      // Only activate drag if clicking near the edge of the dial (outer 40%)
+      if (distance > dialRadius * 0.6 && distance < dialRadius * 1.1) {
+        this._isDragging = true;
+        this._enableControls();
+        handleDragMove(e);
+        e.preventDefault();
+      }
+    };
+
+    const handleDragMove = (e) => {
+      if (!this._isDragging) return;
+      
+      const pos = getEventPosition(e);
+      const angle = getAngleFromPosition(pos.x, pos.y);
+      const temp = angleToTemperature(angle);
+      
+      const config = this._config;
+      
+      // Update the appropriate temperature based on mode
+      if (this.dual) {
+        // In dual mode, determine which setpoint to adjust based on which is closer
+        const lowDiff = Math.abs(temp - this._low);
+        const highDiff = Math.abs(temp - this._high);
+        
+        if (lowDiff < highDiff) {
+          this._low = temp;
+          if ((this._low + config.idle_zone) >= this._high) {
+            this._low = this._high - config.idle_zone;
+          }
+          this._updateText('low', this._low);
+        } else {
+          this._high = temp;
+          if ((this._high - config.idle_zone) <= this._low) {
+            this._high = this._low + config.idle_zone;
+          }
+          this._updateText('high', this._high);
+        }
+      } else {
+        this._target = temp;
+        this._updateText('target', this._target);
+      }
+      
+      e.preventDefault();
+    };
+
+    const handleDragEnd = (e) => {
+      if (this._isDragging) {
+        this._isDragging = false;
+        // The _enableControls timeout will handle calling control() to save
+      }
+    };
+
+    // Mouse events
+    this._root.addEventListener('mousedown', handleDragStart);
+    document.addEventListener('mousemove', handleDragMove);
+    document.addEventListener('mouseup', handleDragEnd);
+
+    // Touch events
+    this._root.addEventListener('touchstart', handleDragStart, { passive: false });
+    document.addEventListener('touchmove', handleDragMove, { passive: false });
+    document.addEventListener('touchend', handleDragEnd);
   }
 
 }
