@@ -319,14 +319,14 @@ export default class ThermostatUI {
 
   _updateText(id, value) {
     const lblTarget = this._root.querySelector(`#${id}`).querySelectorAll('tspan');
-    const text = Math.floor(value);
     if (value) {
-      lblTarget[0].textContent = text;
+      // Display temperature as a normal decimal (e.g., "23.5")
       if (value % 1 != 0) {
-        lblTarget[1].textContent = Math.round(value % 1 * 10);
+        lblTarget[0].textContent = Number(value).toFixed(1);
       } else {
-        lblTarget[1].textContent = '';
+        lblTarget[0].textContent = Math.floor(value);
       }
+      lblTarget[1].textContent = '';
     }
 
     if (this.in_control && id == 'target' && this.dual) {
