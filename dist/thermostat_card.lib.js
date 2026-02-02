@@ -106,7 +106,7 @@ export default class ThermostatUI {
     let dual_state = (this.hvac_state == "heat_cool") || (this.hvac_state == "off")
 
     if (this.dual && dual_state) {
-      tick_label = [this._low, this._high, this.ambient].sort();
+      tick_label = [this._low, this._high, this.ambient].sort((a, b) => a - b);
       this._updateTemperatureSlot(null, 0, `temperature_slot_1`);
       this._updateTemperatureSlot(null, 0, `temperature_slot_2`);
       this._updateTemperatureSlot(null, 0, `temperature_slot_3`);
@@ -127,6 +127,7 @@ export default class ThermostatUI {
             this._updateTemperatureSlot(this._low, 8, `temperature_slot_2`);
           } else {
             this._updateTemperatureSlot(this._low, -8, `temperature_slot_1`);
+            this._updateTemperatureSlot(this.ambient, 0, `temperature_slot_2`);
             this._updateTemperatureSlot(this._high, 8, `temperature_slot_3`);
           }
           break;
@@ -146,13 +147,14 @@ export default class ThermostatUI {
             this._updateTemperatureSlot(this._low, 8, `temperature_slot_2`);
           } else {
             this._updateTemperatureSlot(this._low, -8, `temperature_slot_1`);
+            this._updateTemperatureSlot(this.ambient, 0, `temperature_slot_2`);
             this._updateTemperatureSlot(this._high, 8, `temperature_slot_3`);
           }
           break;
         default:
       }
     } else {
-      tick_label = [this._target, this.ambient].sort();
+      tick_label = [this._target, this.ambient].sort((a, b) => a - b);
       this._updateTemperatureSlot(tick_label[0], -8, `temperature_slot_1`);
       this._updateTemperatureSlot(tick_label[1], 8, `temperature_slot_2`);
 
@@ -382,7 +384,7 @@ export default class ThermostatUI {
 
     this._ticks.forEach((tick, index) => {
       let isLarge = false;
-      let isActive = (index >= from && index <= to) ? 'active ' + hvac_state : '';
+      let isActive = (from !== null && from !== undefined && index >= from && index <= to) ? 'active ' + hvac_state : '';
       large_ticks.forEach(i => isLarge = isLarge || (index == i));
       if (isLarge) isActive += ' large';
       const theta = config.tick_degrees / config.num_ticks;
@@ -584,6 +586,9 @@ export default class ThermostatUI {
 
   _setupDragToSet(radius) {
     this._isDragging = false;
+    this._dragTarget = null;
+    this._dragStartTemp = null;
+    this._dragStartAngle = null;
     
     const getEventPosition = (e) => {
       if (e.touches && e.touches.length > 0) {
@@ -600,101 +605,202 @@ export default class ThermostatUI {
       const dx = x - centerX;
       const dy = y - centerY;
       
-      // Calculate angle in degrees (0 = right, 90 = down, etc.)
       let angle = Math.atan2(dy, dx) * (180 / Math.PI);
-      
-      // Convert to our coordinate system (0 = top, clockwise positive)
       angle = angle + 90;
       if (angle < 0) angle += 360;
       
       return angle;
     };
 
+    const temperatureToAngle = (temp) => {
+      const config = this._config;
+      const tempRange = this.max_value - this.min_value;
+      let angle = ((temp - this.min_value) / tempRange) * config.tick_degrees;
+      angle = angle + (270 - config.offset_degrees);
+      if (angle >= 360) angle -= 360;
+      return angle;
+    };
+
     const angleToTemperature = (angle) => {
       const config = this._config;
-      // The dial starts at offset_degrees and spans tick_degrees
-      // offset_degrees = 180 - (360 - tick_degrees) / 2
-      // For tick_degrees = 300, offset_degrees = 150
-      // The arc goes from (270 - offset_degrees) to (270 - offset_degrees + tick_degrees)
-      // Which is 120 to 420 (or 120 to 60 wrapping around)
-      
-      const startAngle = 270 - config.offset_degrees;  // Where min temp is
+      const startAngle = 270 - config.offset_degrees;
       let normalizedAngle = angle - startAngle;
       
-      // Handle wrap-around
       if (normalizedAngle < 0) normalizedAngle += 360;
       if (normalizedAngle > 360) normalizedAngle -= 360;
       
-      // If angle is beyond the dial range, clamp it
       if (normalizedAngle > config.tick_degrees) {
-        // Determine if closer to start or end
         const distToStart = normalizedAngle > 180 ? 360 - normalizedAngle : normalizedAngle;
         const distToEnd = Math.abs(normalizedAngle - config.tick_degrees);
         normalizedAngle = distToStart < distToEnd ? 0 : config.tick_degrees;
       }
       
-      // Convert to temperature
       const tempRange = this.max_value - this.min_value;
       let temp = this.min_value + (normalizedAngle / config.tick_degrees) * tempRange;
-      
-      // Round to step
       temp = Math.round(temp / config.step) * config.step;
       
-      // Clamp to valid range
       return SvgUtil.restrictToRange(temp, this.min_value, this.max_value);
     };
 
-    const handleDragStart = (e) => {
-      // Only start drag if clicking on the dial area (not on buttons, etc.)
-      const pos = getEventPosition(e);
-      const rect = this._root.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      const dx = pos.x - centerX;
-      const dy = pos.y - centerY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      const dialRadius = rect.width / 2;
+    const isClickOnSlot = (pos, slotId) => {
+      const slot = this._root.querySelector(`#${slotId}`);
+      if (!slot || !slot.textContent) return false;
       
-      // Only activate drag if clicking near the edge of the dial (outer 40%)
-      if (distance > dialRadius * 0.6 && distance < dialRadius * 1.1) {
-        this._isDragging = true;
-        this._enableControls();
-        handleDragMove(e);
-        e.preventDefault();
+      const bbox = slot.getBoundingClientRect();
+      const padding = 20;
+      
+      return pos.x >= bbox.left - padding && 
+             pos.x <= bbox.right + padding && 
+             pos.y >= bbox.top - padding && 
+             pos.y <= bbox.bottom + padding;
+    };
+
+    const getSlotValue = (slotId) => {
+      const slot = this._root.querySelector(`#${slotId}`);
+      return slot ? parseFloat(slot.textContent) : NaN;
+    };
+
+    const isDualState = () => {
+      return this.dual && (this.hvac_state == 'heat_cool' || this.hvac_state == 'off');
+    };
+
+    const handleDragStart = (e) => {
+      const pos = getEventPosition(e);
+      
+      for (const slotId of ['temperature_slot_1', 'temperature_slot_2', 'temperature_slot_3']) {
+        if (isClickOnSlot(pos, slotId)) {
+          const slotValue = getSlotValue(slotId);
+          if (isNaN(slotValue)) continue;
+          
+          if (isDualState()) {
+            if (Math.abs(slotValue - this._low) < 0.1) {
+              this._dragTarget = 'low';
+              this._dragStartTemp = this._low;
+            } else if (Math.abs(slotValue - this._high) < 0.1) {
+              this._dragTarget = 'high';
+              this._dragStartTemp = this._high;
+            } else {
+              continue;
+            }
+          } else {
+            if (Math.abs(slotValue - this._target) < 0.1) {
+              this._dragTarget = 'target';
+              this._dragStartTemp = this._target;
+            } else {
+              continue;
+            }
+          }
+          
+          // Record where we started dragging from
+          this._dragStartAngle = getAngleFromPosition(pos.x, pos.y);
+          this._isDragging = true;
+          this._enableControls();
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
       }
     };
 
     const handleDragMove = (e) => {
-      if (!this._isDragging) return;
+      if (!this._isDragging || !this._dragTarget) return;
+      
+      // Reset the timeout while dragging
+      this._enableControls();
       
       const pos = getEventPosition(e);
-      const angle = getAngleFromPosition(pos.x, pos.y);
-      const temp = angleToTemperature(angle);
+      const currentAngle = getAngleFromPosition(pos.x, pos.y);
       
+      // Calculate how much the angle has changed from where we started
+      let angleDelta = currentAngle - this._dragStartAngle;
+      
+      // Handle wrap-around (e.g., going from 350 to 10 degrees)
+      if (angleDelta > 180) angleDelta -= 360;
+      if (angleDelta < -180) angleDelta += 360;
+      
+      // Convert the starting temp to angle, add the delta, convert back to temp
+      const startTempAngle = temperatureToAngle(this._dragStartTemp);
+      let newAngle = startTempAngle + angleDelta;
+      
+      // Normalize angle
+      if (newAngle < 0) newAngle += 360;
+      if (newAngle >= 360) newAngle -= 360;
+      
+      const temp = angleToTemperature(newAngle);
       const config = this._config;
+
+      // Helper to calculate tick index from temperature
+      const tempToTickIndex = (t) => SvgUtil.restrictToRange(
+        Math.round((t - this.min_value) / (this.max_value - this.min_value) * config.num_ticks), 
+        0, config.num_ticks - 1
+      );
       
-      // Update the appropriate temperature based on mode
-      if (this.dual) {
-        // In dual mode, determine which setpoint to adjust based on which is closer
-        const lowDiff = Math.abs(temp - this._low);
-        const highDiff = Math.abs(temp - this._high);
-        
-        if (lowDiff < highDiff) {
-          this._low = temp;
-          if ((this._low + config.idle_zone) >= this._high) {
-            this._low = this._high - config.idle_zone;
-          }
-          this._updateText('low', this._low);
-        } else {
-          this._high = temp;
-          if ((this._high - config.idle_zone) <= this._low) {
-            this._high = this._low + config.idle_zone;
-          }
-          this._updateText('high', this._high);
-        }
-      } else {
+      if (this._dragTarget === 'target') {
         this._target = temp;
         this._updateText('target', this._target);
+        const temps = [this._target, this._ambient].sort((a, b) => a - b);
+        this._updateTemperatureSlot(temps[0], -8, 'temperature_slot_1');
+        this._updateTemperatureSlot(temps[1], 8, 'temperature_slot_2');
+        
+        // Update arc segment
+        const target_index = tempToTickIndex(this._target);
+        const ambient_index = tempToTickIndex(this._ambient);
+        let from = null, to = null;
+        if (this.hvac_state === 'cool' && target_index <= ambient_index) {
+          from = target_index; to = ambient_index;
+        } else if ((this.hvac_state === 'heat' || this.hvac_state === 'auto') && target_index >= ambient_index) {
+          from = ambient_index; to = target_index;
+        }
+        const tick_indexes = temps.map(t => tempToTickIndex(t));
+        this._updateTicks(from, to, tick_indexes, this.hvac_state);
+      } else if (this._dragTarget === 'low') {
+        this._low = temp;
+        if ((this._low + config.idle_zone) >= this._high) {
+          this._low = this._high - config.idle_zone;
+        }
+        this._updateText('low', this._low);
+        // Update all 3 slots based on sorted positions
+        const temps = [this._low, this._high, this._ambient].sort((a, b) => a - b);
+        this._updateTemperatureSlot(temps[0], -8, 'temperature_slot_1');
+        this._updateTemperatureSlot(temps[1], 0, 'temperature_slot_2');
+        this._updateTemperatureSlot(temps[2], 8, 'temperature_slot_3');
+        
+        // Update arc segment
+        const low_index = tempToTickIndex(this._low);
+        const high_index = tempToTickIndex(this._high);
+        const ambient_index = tempToTickIndex(this._ambient);
+        let from = null, to = null;
+        if (high_index < ambient_index) {
+          from = high_index; to = ambient_index;
+        } else if (low_index > ambient_index) {
+          from = ambient_index; to = low_index;
+        }
+        const tick_indexes = temps.map(t => tempToTickIndex(t));
+        this._updateTicks(from, to, tick_indexes, this.hvac_state);
+      } else if (this._dragTarget === 'high') {
+        this._high = temp;
+        if ((this._high - config.idle_zone) <= this._low) {
+          this._high = this._low + config.idle_zone;
+        }
+        this._updateText('high', this._high);
+        // Update all 3 slots based on sorted positions
+        const temps = [this._low, this._high, this._ambient].sort((a, b) => a - b);
+        this._updateTemperatureSlot(temps[0], -8, 'temperature_slot_1');
+        this._updateTemperatureSlot(temps[1], 0, 'temperature_slot_2');
+        this._updateTemperatureSlot(temps[2], 8, 'temperature_slot_3');
+        
+        // Update arc segment
+        const low_index = tempToTickIndex(this._low);
+        const high_index = tempToTickIndex(this._high);
+        const ambient_index = tempToTickIndex(this._ambient);
+        let from = null, to = null;
+        if (high_index < ambient_index) {
+          from = high_index; to = ambient_index;
+        } else if (low_index > ambient_index) {
+          from = ambient_index; to = low_index;
+        }
+        const tick_indexes = temps.map(t => tempToTickIndex(t));
+        this._updateTicks(from, to, tick_indexes, this.hvac_state);
       }
       
       e.preventDefault();
@@ -703,11 +809,13 @@ export default class ThermostatUI {
     const handleDragEnd = (e) => {
       if (this._isDragging) {
         this._isDragging = false;
-        // The _enableControls timeout will handle calling control() to save
+        this._dragTarget = null;
+        this._dragStartTemp = null;
+        this._dragStartAngle = null;
       }
     };
 
-    // Mouse events
+    // Mouse events on the root to catch clicks on slots
     this._root.addEventListener('mousedown', handleDragStart);
     document.addEventListener('mousemove', handleDragMove);
     document.addEventListener('mouseup', handleDragEnd);
