@@ -107,6 +107,7 @@ export default class ThermostatUI {
 
     // Only some states support dual temp adjustment, even if the hvac is generally dual capable
     let dual_state = (this.hvac_state == "heat_cool") || (this.hvac_state == "off")
+    let tick_state = this.hvac_state; // Track effective state for tick coloring
 
     if (this.dual && dual_state) {
       tick_label = [this._low, this._high, this.ambient].sort((a, b) => a - b);
@@ -121,11 +122,13 @@ export default class ThermostatUI {
           if (high_index < ambient_index) {
             from = high_index;
             to = ambient_index;
+            tick_state = 'cool'; // Cooling needed - use blue ticks
             this._updateTemperatureSlot(this.ambient, 8, `temperature_slot_3`);
             this._updateTemperatureSlot(this._high, -8, `temperature_slot_2`);
           } else if (low_index > ambient_index) {
             from = ambient_index;
             to = low_index;
+            tick_state = 'heat'; // Heating needed - use orange ticks
             this._updateTemperatureSlot(this.ambient, -8, `temperature_slot_1`);
             this._updateTemperatureSlot(this._low, 8, `temperature_slot_2`);
           } else {
@@ -209,7 +212,7 @@ export default class ThermostatUI {
     }
 
     tick_label.forEach(item => tick_indexes.push(SvgUtil.restrictToRange(Math.round((item - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1)));
-    this._updateTicks(from, to, tick_indexes, this.hvac_state);
+    this._updateTicks(from, to, tick_indexes, tick_state);
     this._updateText('ambient', this.ambient);
     this._updateEdit(false);
     this._updateDialog(this.hvac_modes, hass);
@@ -684,13 +687,16 @@ export default class ThermostatUI {
         const high_index = tempToTickIndex(this._high);
         const ambient_index = tempToTickIndex(this._ambient);
         let from = null, to = null;
+        let tick_state = this.hvac_state;
         if (high_index < ambient_index) {
           from = high_index; to = ambient_index;
+          tick_state = 'cool';
         } else if (low_index > ambient_index) {
           from = ambient_index; to = low_index;
+          tick_state = 'heat';
         }
         const tick_indexes = temps.map(t => tempToTickIndex(t));
-        this._updateTicks(from, to, tick_indexes, this.hvac_state);
+        this._updateTicks(from, to, tick_indexes, tick_state);
       } else if (this._dragTarget === 'high') {
         this._high = temp;
         if ((this._high - config.idle_zone) <= this._low) {
@@ -708,13 +714,16 @@ export default class ThermostatUI {
         const high_index = tempToTickIndex(this._high);
         const ambient_index = tempToTickIndex(this._ambient);
         let from = null, to = null;
+        let tick_state = this.hvac_state;
         if (high_index < ambient_index) {
           from = high_index; to = ambient_index;
+          tick_state = 'cool';
         } else if (low_index > ambient_index) {
           from = ambient_index; to = low_index;
+          tick_state = 'heat';
         }
         const tick_indexes = temps.map(t => tempToTickIndex(t));
-        this._updateTicks(from, to, tick_indexes, this.hvac_state);
+        this._updateTicks(from, to, tick_indexes, tick_state);
       }
       
       e.preventDefault();
