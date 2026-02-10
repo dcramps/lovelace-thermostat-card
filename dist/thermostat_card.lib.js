@@ -437,10 +437,13 @@ export default class ThermostatUI {
     })
   }
 
-  // build circle around
+  // build arc ring around ticks area
   _buildRing(radius) {
+    const config = this._config;
+    const startAngle = 360 - config.offset_degrees;
+    const endAngle = startAngle + config.tick_degrees;
     return SvgUtil.createSVGElement('path', {
-      d: SvgUtil.donutPath(radius, radius, radius - 4, radius - 8),
+      d: SvgUtil.arcDonutPath(radius, radius, radius - 4, radius - 8, startAngle, endAngle),
       class: 'dial__editableIndicator',
     })
   }
@@ -785,6 +788,31 @@ class SvgUtil {
   }
   static donutPath(cx, cy, rOuter, rInner) {
     return this.circleToPath(cx, cy, rOuter) + " " + this.circleToPath(cx, cy, rInner);
+  }
+
+  static arcDonutPath(cx, cy, rOuter, rInner, startAngle, endAngle) {
+    // Convert angles to radians (angles are in degrees, 0 = top, clockwise)
+    const toRad = (deg) => (deg - 90) * Math.PI / 180;
+    const startRad = toRad(startAngle);
+    const endRad = toRad(endAngle);
+    
+    // Calculate points
+    const outerStart = { x: cx + rOuter * Math.cos(startRad), y: cy + rOuter * Math.sin(startRad) };
+    const outerEnd = { x: cx + rOuter * Math.cos(endRad), y: cy + rOuter * Math.sin(endRad) };
+    const innerStart = { x: cx + rInner * Math.cos(startRad), y: cy + rInner * Math.sin(startRad) };
+    const innerEnd = { x: cx + rInner * Math.cos(endRad), y: cy + rInner * Math.sin(endRad) };
+    
+    // Determine if arc is greater than 180 degrees
+    const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+    
+    // Build path: outer arc, line to inner, inner arc (reverse), close
+    return [
+      'M', outerStart.x, outerStart.y,
+      'A', rOuter, rOuter, 0, largeArc, 1, outerEnd.x, outerEnd.y,
+      'L', innerEnd.x, innerEnd.y,
+      'A', rInner, rInner, 0, largeArc, 0, innerStart.x, innerStart.y,
+      'Z'
+    ].join(' ');
   }
 
   static superscript(n) {
