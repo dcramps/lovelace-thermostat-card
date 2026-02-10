@@ -100,10 +100,10 @@ export default class ThermostatUI {
     this._updateClass('has_dual', this.dual);
     let tick_label, from, to;
     const tick_indexes = [];
-    const ambient_index = SvgUtil.restrictToRange(Math.round((this.ambient - this.min_value) / (this.max_value - this.min_value) * config.num_ticks), 0, config.num_ticks - 1);
-    const target_index = SvgUtil.restrictToRange(Math.round((this._target - this.min_value) / (this.max_value - this.min_value) * config.num_ticks), 0, config.num_ticks - 1);
-    const high_index = SvgUtil.restrictToRange(Math.round((this._high - this.min_value) / (this.max_value - this.min_value) * config.num_ticks), 0, config.num_ticks - 1);
-    const low_index = SvgUtil.restrictToRange(Math.round((this._low - this.min_value) / (this.max_value - this.min_value) * config.num_ticks), 0, config.num_ticks - 1);
+    const ambient_index = SvgUtil.restrictToRange(Math.round((this.ambient - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1);
+    const target_index = SvgUtil.restrictToRange(Math.round((this._target - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1);
+    const high_index = SvgUtil.restrictToRange(Math.round((this._high - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1);
+    const low_index = SvgUtil.restrictToRange(Math.round((this._low - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1);
 
     // Only some states support dual temp adjustment, even if the hvac is generally dual capable
     let dual_state = (this.hvac_state == "heat_cool") || (this.hvac_state == "off")
@@ -208,7 +208,7 @@ export default class ThermostatUI {
       }
     }
 
-    tick_label.forEach(item => tick_indexes.push(SvgUtil.restrictToRange(Math.round((item - this.min_value) / (this.max_value - this.min_value) * config.num_ticks), 0, config.num_ticks - 1)));
+    tick_label.forEach(item => tick_indexes.push(SvgUtil.restrictToRange(Math.round((item - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1)));
     this._updateTicks(from, to, tick_indexes, this.hvac_state);
     this._updateText('ambient', this.ambient);
     this._updateEdit(false);
@@ -310,7 +310,7 @@ export default class ThermostatUI {
       let isActive = (from !== null && from !== undefined && index >= from && index <= to) ? 'active ' + hvac_state : '';
       large_ticks.forEach(i => isLarge = isLarge || (index == i));
       if (isLarge) isActive += ' large';
-      const theta = config.tick_degrees / config.num_ticks;
+      const theta = config.tick_degrees / (config.num_ticks - 1);
       SvgUtil.attributes(tick, {
         d: SvgUtil.pointsToPath(SvgUtil.rotatePoints(isLarge ? tickPointsLarge : tickPoints, index * theta - config.offset_degrees, [config.radius, config.radius])),
         class: isActive
@@ -628,7 +628,7 @@ export default class ThermostatUI {
 
       // Helper to calculate tick index from temperature
       const tempToTickIndex = (t) => SvgUtil.restrictToRange(
-        Math.round((t - this.min_value) / (this.max_value - this.min_value) * config.num_ticks), 
+        Math.round((t - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 
         0, config.num_ticks - 1
       );
       
