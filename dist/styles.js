@@ -193,14 +193,6 @@ export function cssData(user) {
     opacity: 0;
     transition: opacity 0.5s;
   }
-  .dial__temperatureControl {
-    fill: white;
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-  .dial__temperatureControl.control-visible {
-    opacity: 0.2;
-  }
   .dial--edit .dial__editableIndicator {
     opacity: 1;
   }
@@ -231,8 +223,8 @@ export function cssData(user) {
   .dial__ticks path.active {
     fill: var(--mode_color);
   }
-  .dial__ticks path.active.large {
-    fill: var(--mode_color);
+  .dial__ticks path.large {
+    fill: white;
   }
   .dial text, .dial text tspan {
     fill: var(--thermostat-text-color);
@@ -264,26 +256,6 @@ export function cssData(user) {
     font-size: 120px;
     font-weight: bold;
     visibility: visible;
-  }
-  .dial.in_control.has_dual .dial__chevron--low,
-  .dial.in_control.has_dual .dial__chevron--high {
-    visibility: visible;
-  }
-  .dial.in_control .dial__chevron--target {
-    visibility: visible;
-  }
-  .dial.in_control.has_dual .dial__chevron--target {
-    visibility: hidden;
-  }
-  .dial .dial__chevron {
-    visibility: hidden;
-    fill: none;
-    stroke: var(--thermostat-text-color);
-    stroke-width: 4px;
-    opacity: 0.3;
-  }
-  .dial .dial__chevron.pressed {
-    opacity: 1;
   }
   .dial.in_control .dial__lbl--ambient {
     visibility: hidden;

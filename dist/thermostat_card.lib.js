@@ -2,15 +2,19 @@ export default class ThermostatUI {
   get container() {
     return this._container
   }
+
   set dual(val) {
     this._dual = val
   }
+
   get dual() {
     return this._dual;
   }
+
   get in_control() {
     return this._in_control;
   }
+
   get temperature() {
     return {
       low: this._low,
@@ -18,9 +22,11 @@ export default class ThermostatUI {
       target: this._target,
     }
   }
+
   get ambient() {
     return this._ambient;
   }
+
   set temperature(val) {
     this._ambient = val.ambient;
     this._low = val.low;
@@ -28,8 +34,8 @@ export default class ThermostatUI {
     this._target = val.target;
     if (this._low && this._high) this.dual = true;
   }
-  constructor(config) {
 
+  constructor(config) {
     this._config = config;  // need certain options for updates
     this._ticks = [];       // need for dynamic tick updates
     this._dual = false;     // by default is single temperature
@@ -76,7 +82,6 @@ export default class ThermostatUI {
   }
 
   updateState(options, hass) {
-
     const config = this._config;
     const away = options.away || false;
     this.entity = options.entity;
@@ -205,7 +210,6 @@ export default class ThermostatUI {
 
     tick_label.forEach(item => tick_indexes.push(SvgUtil.restrictToRange(Math.round((item - this.min_value) / (this.max_value - this.min_value) * config.num_ticks), 0, config.num_ticks - 1)));
     this._updateTicks(from, to, tick_indexes, this.hvac_state);
-    // this._updateColor(this.hvac_state, this.preset_mode);
     this._updateText('ambient', this.ambient);
     this._updateEdit(false);
     this._updateDialog(this.hvac_modes, hass);
@@ -221,14 +225,12 @@ export default class ThermostatUI {
     this._updateClass('in_control', this.in_control);
     if (this._timeoutHandler) clearTimeout(this._timeoutHandler);
     this._updateEdit(true);
-    //this._updateClass('has-thermo', true);
     this._updateText('target', this.temperature.target);
     this._updateText('low', this.temperature.low);
     this._updateText('high', this.temperature.high);
     this._timeoutHandler = setTimeout(() => {
       this._updateText('ambient', this.ambient);
       this._updateEdit(false);
-      //this._updateClass('has-thermo', false);
       this._in_control = false;
       this._updateClass('in_control', this.in_control);
       config.control();
@@ -242,7 +244,6 @@ export default class ThermostatUI {
   _updateText(id, value) {
     const lblTarget = this._root.querySelector(`#${id}`).querySelectorAll('tspan');
     if (value) {
-      // Display temperature as a normal decimal (e.g., "23.5")
       if (value % 1 != 0) {
         lblTarget[0].textContent = Number(value).toFixed(1);
       } else {
@@ -262,7 +263,6 @@ export default class ThermostatUI {
   }
 
   _updateTemperatureSlot(value, offset, slot) {
-
     const config = this._config;
     const lblSlot1 = this._root.querySelector(`#${slot}`)
     lblSlot1.textContent = value != null ? SvgUtil.superscript(value) : '';
@@ -278,9 +278,7 @@ export default class ThermostatUI {
   }
 
   _updateColor(state, preset_mode) {
-
     if (Object.prototype.toString.call(preset_mode) === "[object String]") {
-
       if (state != 'off' && preset_mode.toLowerCase() == 'idle')
         state = 'idle'
       this._root.classList.forEach(c => {
@@ -319,6 +317,7 @@ export default class ThermostatUI {
       });
     });
   }
+
   _updateDialog(modes, hass) {
     this._modes_dialog.innerHTML = "";
     for (var i = 0; i < modes.length; i++) {
@@ -356,6 +355,7 @@ export default class ThermostatUI {
       this._modes_dialog.appendChild(d)
     }
   }
+
   _buildCore(diameter) {
     return SvgUtil.createSVGElement('svg', {
       width: '100%',
@@ -368,12 +368,15 @@ export default class ThermostatUI {
   openProp() {
     this._config.propWin(this.entity.entity_id)
   }
+
   _openDialog() {
     this._modes_dialog.className = "dialog modes";
   }
+
   _hideDialog() {
     this._modes_dialog.className = "dialog modes hide";
   }
+
   _setMode(e, mode, hass) {
     console.log(mode);
     let config = this._config;
@@ -388,8 +391,8 @@ export default class ThermostatUI {
     }, config.pending * 1000);
     e.stopPropagation();
   }
-  _load_icon(state, ic_name) {
 
+  _load_icon(state, ic_name) {
     let ic_dot = 'dot_r'
     if (ic_name == '') {
       ic_dot = 'dot_h'
@@ -403,10 +406,12 @@ export default class ThermostatUI {
     `;
     return this._main_icon;
   }
+
   _buildDialog() {
     this._modes_dialog.className = "dialog modes hide";
     return this._modes_dialog;
   }
+
   // build black dial
   _buildDial(radius) {
     return SvgUtil.createSVGElement('circle', {
@@ -416,6 +421,7 @@ export default class ThermostatUI {
       class: 'dial__shape'
     })
   }
+
   // build circle around
   _buildRing(radius) {
     return SvgUtil.createSVGElement('path', {

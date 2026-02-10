@@ -123,7 +123,6 @@ class ThermostatCard extends HTMLElement {
     this.thermostat = new ThermostatUI(cardConfig);
     
     if (cardConfig.no_card === true) {
-      
       const card = document.createElement('ha-card');
       card.className = "no_card";
       const style = document.createElement('style');
@@ -132,9 +131,7 @@ class ThermostatCard extends HTMLElement {
       card.appendChild(this.thermostat.container);
       root.appendChild(card);
       
-    }
-    else {
-
+    } else {
       const card = document.createElement('ha-card');
       const style = document.createElement('style');
       style.textContent = cssData();
