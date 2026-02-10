@@ -119,19 +119,24 @@ export default class ThermostatUI {
         case 'heat_cool':
           this._load_icon(this.hvac_state, 'sync');
 
+          // Always position: low to left of tick (-8), high to right of tick (+8)
+          // Ambient positioned based on where it falls relative to setpoints
           if (high_index < ambient_index) {
+            // Cooling needed: ambient is highest
             from = high_index;
             to = ambient_index;
             tick_state = 'cool'; // Cooling needed - use blue ticks
-            this._updateTemperatureSlot(this.ambient, 8, `temperature_slot_3`);
-            this._updateTemperatureSlot(this._high, -8, `temperature_slot_2`);
+            this._updateTemperatureSlot(this._high, 8, `temperature_slot_2`);
+            this._updateTemperatureSlot(this.ambient, -8, `temperature_slot_3`);
           } else if (low_index > ambient_index) {
+            // Heating needed: ambient is lowest
             from = ambient_index;
             to = low_index;
             tick_state = 'heat'; // Heating needed - use orange ticks
-            this._updateTemperatureSlot(this.ambient, -8, `temperature_slot_1`);
-            this._updateTemperatureSlot(this._low, 8, `temperature_slot_2`);
+            this._updateTemperatureSlot(this.ambient, 8, `temperature_slot_1`);
+            this._updateTemperatureSlot(this._low, -8, `temperature_slot_2`);
           } else {
+            // Ambient is between setpoints (comfort zone)
             this._updateTemperatureSlot(this._low, -8, `temperature_slot_1`);
             this._updateTemperatureSlot(this.ambient, 0, `temperature_slot_2`);
             this._updateTemperatureSlot(this._high, 8, `temperature_slot_3`);
@@ -140,22 +145,10 @@ export default class ThermostatUI {
 
         case 'off':
           this._load_icon(this.hvac_state, 'power');
-
-          if (high_index < ambient_index) {
-            from = high_index;
-            to = ambient_index;
-            this._updateTemperatureSlot(this.ambient, 8, `temperature_slot_3`);
-            this._updateTemperatureSlot(this._high, -8, `temperature_slot_2`);
-          } else if (low_index > ambient_index) {
-            from = ambient_index;
-            to = low_index;
-            this._updateTemperatureSlot(this.ambient, -8, `temperature_slot_1`);
-            this._updateTemperatureSlot(this._low, 8, `temperature_slot_2`);
-          } else {
-            this._updateTemperatureSlot(this._low, -8, `temperature_slot_1`);
-            this._updateTemperatureSlot(this.ambient, 0, `temperature_slot_2`);
-            this._updateTemperatureSlot(this._high, 8, `temperature_slot_3`);
-          }
+          // When off, only show ambient temperature, hide setpoints
+          this._updateTemperatureSlot(null, 0, `temperature_slot_1`);
+          this._updateTemperatureSlot(this.ambient, 0, `temperature_slot_2`);
+          this._updateTemperatureSlot(null, 0, `temperature_slot_3`);
           break;
         default:
       }
@@ -205,6 +198,8 @@ export default class ThermostatUI {
           break;
         case 'off':
           this._load_icon(this.hvac_state, 'power');
+          this._updateTemperatureSlot(null, 0, `temperature_slot_1`);
+          this._updateTemperatureSlot(this.ambient, 0, `temperature_slot_2`);
           break;
         default:
           this._load_icon('more', 'dots-horizontal');
