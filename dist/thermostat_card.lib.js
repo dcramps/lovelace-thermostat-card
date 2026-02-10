@@ -292,11 +292,21 @@ export default class ThermostatUI {
   _updateTicks(from, to, large_ticks, hvac_state) {
     const config = this._config;
 
+    // Calculate tick length and create smaller version for half-degree ticks
+    const tickLength = config.ticks_inner_radius - config.ticks_outer_radius;
+    const smallTickInner = config.ticks_outer_radius + tickLength * (2/3);
+
     const tickPoints = [
       [config.radius - 1, config.ticks_outer_radius],
       [config.radius + 1, config.ticks_outer_radius],
       [config.radius + 1, config.ticks_inner_radius],
       [config.radius - 1, config.ticks_inner_radius]
+    ];
+    const tickPointsSmall = [
+      [config.radius - 1, config.ticks_outer_radius],
+      [config.radius + 1, config.ticks_outer_radius],
+      [config.radius + 1, smallTickInner],
+      [config.radius - 1, smallTickInner]
     ];
     const tickPointsLarge = [
       [config.radius - 1.5, config.ticks_outer_radius],
@@ -311,8 +321,15 @@ export default class ThermostatUI {
       large_ticks.forEach(i => isLarge = isLarge || (index == i));
       if (isLarge) isActive += ' large';
       const theta = config.tick_degrees / (config.num_ticks - 1);
+      
+      // Determine if this is a half-degree tick (odd index = half degree)
+      const isHalfDegree = index % 2 === 1;
+      let points = tickPoints;
+      if (isLarge) points = tickPointsLarge;
+      else if (isHalfDegree) points = tickPointsSmall;
+      
       SvgUtil.attributes(tick, {
-        d: SvgUtil.pointsToPath(SvgUtil.rotatePoints(isLarge ? tickPointsLarge : tickPoints, index * theta - config.offset_degrees, [config.radius, config.radius])),
+        d: SvgUtil.pointsToPath(SvgUtil.rotatePoints(points, index * theta - config.offset_degrees, [config.radius, config.radius])),
         class: isActive
       });
     });
