@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thermostat Card Test</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 { color: white; margin-bottom: 20px; }
+    .thermostat-container { width: 100%; max-width: 350px; margin: 20px auto; }
+    .controls {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+      width: 100%;
+      max-width: 350px;
+    }
+    .controls h3 { color: white; margin-top: 0; margin-bottom: 15px; }
+    .control-group { margin-bottom: 15px; }
+    .control-group label { color: rgba(255, 255, 255, 0.8); display: block; margin-bottom: 5px; font-size: 14px; }
+    .control-group input[type="range"] { width: 100%; }
+    .control-group select { width: 100%; padding: 8px; border-radius: 6px; border: none; background: rgba(255, 255, 255, 0.9); }
+    .status { background: rgba(0, 0, 0, 0.3); border-radius: 8px; padding: 15px; margin-top: 15px; }
+    .status p { color: rgba(255, 255, 255, 0.9); margin: 5px 0; font-size: 14px; }
+    .status span { color: #4fc3f7; font-weight: bold; }
+
+    /* Thermostat styles */
+    ha-card {
+      overflow: hidden;
+      --auto_color: rgb(227, 99, 4, 1);
+      --cool_color: rgba(0, 122, 241, 0.6);
+      --cool_colorc: rgba(0, 122, 241, 1);
+      --heat_color: #ff8100;
+      --heat_colorc: rgb(227, 99, 4, 1);
+      --off_color: #8a8a8a;
+      --fan_only_color: #D7DBDD;
+      --dry_color: #efbd07;
+      --idle_color: #808080;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+    .auto, .heat_cool { --mode_color: var(--auto_color); }
+    .cool { --mode_color: var(--cool_color); }
+    .heat { --mode_color: var(--heat_color); }
+    .off { --mode_color: var(--off_color); }
+    .fan_only { --mode_color: var(--fan_only_color); }
+    .dry { --mode_color: var(--dry_color); }
+    .idle { --mode_color: var(--idle_color); }
+    .c_body { padding: 5%; }
+    .c_icon, .prop { display: none; }
+    .climate_info { position: absolute; top: 82%; left: 50%; transform: translate(-50%, -50%); width: 14%; height: 14%; }
+    .modes, .mode_color { position: absolute; max-width: 50px; top: 50%; left: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%); }
+    .dialog { display: none; }
+    .dot_r { height: 100%; width: 100%; background-color: white; border-radius: 50%; display: inline-block; opacity: 0.1; }
+    .dot_h { visibility: hidden; }
+    .dial {
+      user-select: none;
+      max-width: 300px;
+      min-width: 150px;
+      display: block;
+      margin: 0 auto;
+      --thermostat-off-fill: #000000c2;
+      --thermostat-path-color: rgba(255, 255, 255, 0.3);
+      --thermostat-path-active-color: rgba(255, 255, 255, 0.8);
+      --thermostat-text-color: white;
+    }
+    .dial .dial__shape { transition: fill 0.5s; fill: var(--thermostat-off-fill); }
+    .dial__ico__thermo { fill: var(--thermostat-path-active-color); opacity: 0; transition: opacity 0.5s; pointer-events: none; }
+    .dial.has-thermo .dial__ico__thermo { display: block; opacity: 1; }
+    .dial__editableIndicator { fill: white; fill-rule: evenodd; opacity: 0; transition: opacity 0.5s; }
+    .dial__temperatureControl { fill: white; opacity: 0; transition: opacity 0.2s; }
+    .dial--edit .dial__editableIndicator { opacity: 1; }
+    .dial--state--off .dial__shape { fill: var(--thermostat-off-fill); }
+    .dial--state--heat .dial__shape { fill: var(--heat_colorc); }
+    .dial--state--cool .dial__shape { fill: var(--cool_colorc); }
+    .dial--state--auto .dial__shape, .dial--state--heat_cool .dial__shape { fill: var(--auto_color); }
+    .dial--state--fan_only .dial__shape { fill: var(--fan_only_color); }
+    .dial--state--dry .dial__shape { fill: var(--dry_color); }
+    .dial__ticks path { fill: var(--thermostat-path-color); }
+    .dial__ticks path.active.heat { fill: #ff8100; }
+    .dial__ticks path.active.cool { fill: rgba(0, 122, 241, 0.6); }
+    .dial__ticks path.active.auto, .dial__ticks path.active.heat_cool { fill: rgb(227, 99, 4); }
+    .dial__ticks path.active.off { fill: #8a8a8a; }
+    .dial__ticks path.active.fan_only { fill: #D7DBDD; }
+    .dial__ticks path.active.dry { fill: #efbd07; }
+    .dial__ticks path.large { fill: white !important; }
+    .dial text, .dial text tspan { fill: var(--thermostat-text-color); text-anchor: middle; font-family: Helvetica, sans-serif; alignment-baseline: central; dominant-baseline: central; }
+    .dial__lbl--target { font-size: 120px; font-weight: bold; visibility: hidden; }
+    .dial__lbl--low, .dial__lbl--high { font-size: 90px; font-weight: bold; visibility: hidden; }
+    .dial.in_control .dial__lbl--target { visibility: visible; }
+    .dial.in_control.has_dual .dial__lbl--target { visibility: hidden; }
+    .dial.in_control.has_dual .dial__lbl--low, .dial.in_control.has_dual .dial__lbl--high { visibility: visible; }
+    .dial__lbl--ambient { font-size: 120px; font-weight: bold; visibility: visible; }
+    .dial .dial__chevron { visibility: hidden; }
+    .dial.in_control .dial__lbl--ambient { visibility: hidden; }
+    .dial__lbl--super--ambient, .dial__lbl--super--target { font-size: 40px; font-weight: bold; }
+    .dial__lbl--super--high, .dial__lbl--super--low { font-size: 30px; font-weight: bold; }
+    .dial__lbl--ring { font-size: 22px; font-weight: bold; }
+    .dial__lbl--title { font-size: 24px; }
+  </style>
+</head>
+<body>
+  <h1>🌡️ Thermostat Card Test</h1>
+  <div class="thermostat-container" id="thermostat-mount"></div>
+  <div class="controls">
+    <h3>Simulation Controls</h3>
+    <div class="control-group">
+      <label>HVAC Mode</label>
+      <select id="hvac-mode">
+        <option value="off">Off</option>
+        <option value="heat" selected>Heat</option>
+        <option value="cool">Cool</option>
+        <option value="heat_cool">Heat/Cool (Dual)</option>
+        <option value="auto">Auto</option>
+        <option value="fan_only">Fan Only</option>
+        <option value="dry">Dry</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>Current Room Temperature: <span id="ambient-value">21</span>°</label>
+      <input type="range" id="ambient-temp" min="10" max="35" value="21" step="0.5">
+    </div>
+    <div class="status">
+      <p>Target: <span id="status-target">--</span>°</p>
+      <p>Low Setpoint: <span id="status-low">--</span>°</p>
+      <p>High Setpoint: <span id="status-high">--</span>°</p>
+      <p>Mode: <span id="status-mode">heat</span></p>
+    </div>
+  </div>
+  <p style="color: rgba(255,255,255,0.5); margin-top: 20px; font-size: 12px;">Drag along the outer edge of the dial to set temperature</p>
+
+  <script>
+    // ============ INLINED thermostat_card.lib.js ============
+    class SvgUtil {
+      static createSVGElement(tag, attributes) {
+        const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+        this.attributes(element, attributes);
+        return element;
+      }
+      static attributes(element, attrs) {
+        for (let i in attrs) element.setAttribute(i, attrs[i]);
+      }
+      static rotatePoint(point, angle, origin) {
+        const radians = angle * Math.PI / 180;
+        const x = point[0] - origin[0];
+        const y = point[1] - origin[1];
+        const x1 = x * Math.cos(radians) - y * Math.sin(radians) + origin[0];
+        const y1 = x * Math.sin(radians) + y * Math.cos(radians) + origin[1];
+        return [x1, y1];
+      }
+      static rotatePoints(points, angle, origin) {
+        return points.map((point) => this.rotatePoint(point, angle, origin));
+      }
+      static pointsToPath(points) {
+        return points.map((point, iPoint) => (iPoint > 0 ? 'L' : 'M') + point[0] + ' ' + point[1]).join(' ') + 'Z';
+      }
+      static circleToPath(cx, cy, r) {
+        return ["M", cx, ",", cy, "m", 0 - r, ",", 0, "a", r, ",", r, 0, 1, ",", 0, r * 2, ",", 0, "a", r, ",", r, 0, 1, ",", 0, 0 - r * 2, ",", 0, "z"].join(' ').replace(/\s,\s/g, ",");
+      }
+      static donutPath(cx, cy, rOuter, rInner) {
+        return this.circleToPath(cx, cy, rOuter) + " " + this.circleToPath(cx, cy, rInner);
+      }
+      static arcDonutPath(cx, cy, rOuter, rInner, startAngle, endAngle) {
+        // Convert angles to radians (angles are in degrees, 0 = top, clockwise)
+        const toRad = (deg) => (deg - 90) * Math.PI / 180;
+        const startRad = toRad(startAngle);
+        const endRad = toRad(endAngle);
+        
+        // Calculate points
+        const outerStart = { x: cx + rOuter * Math.cos(startRad), y: cy + rOuter * Math.sin(startRad) };
+        const outerEnd = { x: cx + rOuter * Math.cos(endRad), y: cy + rOuter * Math.sin(endRad) };
+        const innerStart = { x: cx + rInner * Math.cos(startRad), y: cy + rInner * Math.sin(startRad) };
+        const innerEnd = { x: cx + rInner * Math.cos(endRad), y: cy + rInner * Math.sin(endRad) };
+        
+        // Determine if arc is greater than 180 degrees
+        const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+        
+        // Build path: outer arc, line to inner, inner arc (reverse), close
+        return [
+          'M', outerStart.x, outerStart.y,
+          'A', rOuter, rOuter, 0, largeArc, 1, outerEnd.x, outerEnd.y,
+          'L', innerEnd.x, innerEnd.y,
+          'A', rInner, rInner, 0, largeArc, 0, innerStart.x, innerStart.y,
+          'Z'
+        ].join(' ');
+      }
+      static superscript(n) {
+        if ((n - Math.floor(n)) !== 0) n = Number(n).toFixed(1);
+        return `${n}`;
+      }
+      static restrictToRange(val, min, max) {
+        if (val < min) return min;
+        if (val > max) return max;
+        return val;
+      }
+      static setClass(el, className, state) {
+        el.classList[state ? 'add' : 'remove'](className);
+      }
+      static anglesToSectors(radius, startAngle, angle) {
+        let aRad = 0, z = 0, x = 0, X = 0, Y = 0;
+        const aCalc = (angle > 180) ? 360 - angle : angle;
+        aRad = aCalc * Math.PI / 180;
+        z = Math.sqrt(2 * radius * radius - (2 * radius * radius * Math.cos(aRad)));
+        if (aCalc <= 90) x = radius * Math.sin(aRad);
+        else x = radius * Math.sin((180 - aCalc) * Math.PI / 180);
+        Y = Math.sqrt(z * z - x * x);
+        if (angle <= 180) X = radius + x;
+        else X = radius - x;
+        return { L: radius, X: X, Y: Y, R: startAngle };
+      }
+    }
+
+    class ThermostatUI {
+      get container() { return this._container; }
+      set dual(val) { this._dual = val; }
+      get dual() { return this._dual; }
+      get in_control() { return this._in_control; }
+      get temperature() { return { low: this._low, high: this._high, target: this._target }; }
+      get ambient() { return this._ambient; }
+      set temperature(val) {
+        this._ambient = val.ambient;
+        this._low = val.low;
+        this._high = val.high;
+        this._target = val.target;
+        if (this._low && this._high) this.dual = true;
+      }
+
+      constructor(config) {
+        this._config = config;
+        this._ticks = [];
+        this._controls = [];
+        this._dual = false;
+        this._container = document.createElement('div');
+        this._main_icon = document.createElement('div');
+        this._modes_dialog = document.createElement('div');
+        config.title = config.title || 'Title';
+
+        this._ic = document.createElement('div');
+        this._ic.className = "prop";
+        this._container.appendChild(this._ic);
+        this._container.appendChild(this._load_icon('', ''));
+        this.c_body = document.createElement('div');
+        this.c_body.className = 'c_body';
+        const root = this._buildCore(config.diameter);
+        root.appendChild(this._buildDial(config.radius));
+        root.appendChild(this._buildTicks(config.num_ticks));
+        root.appendChild(this._buildRing(config.radius));
+        root.appendChild(this._buildDialSlot(1));
+        root.appendChild(this._buildDialSlot(2));
+        root.appendChild(this._buildDialSlot(3));
+        root.appendChild(this._buildText(config.radius, 'title', 0));
+        root.appendChild(this._buildText(config.radius, 'ambient', 0));
+        root.appendChild(this._buildText(config.radius, 'target', 0));
+        root.appendChild(this._buildText(config.radius, 'low', -config.radius / 2.5));
+        root.appendChild(this._buildText(config.radius, 'high', config.radius / 3));
+
+        this.c_body.appendChild(root);
+        this._container.appendChild(this.c_body);
+        this._root = root;
+        this._buildControls(config.radius);
+        this._setupDragToSet(config.radius);
+        this._root.addEventListener('click', () => this._enableControls());
+        this._updateText('title', config.title);
+      }
+
+      updateState(options, hass) {
+        const config = this._config;
+        this.entity = options.entity;
+        this.min_value = options.min_value;
+        this.max_value = options.max_value;
+        this.hvac_state = options.hvac_state;
+        this.temperature = {
+          low: options.target_temperature_low,
+          high: options.target_temperature_high,
+          target: options.target_temperature,
+          ambient: options.ambient_temperature,
+        };
+        this._updateClass('has_dual', this.dual);
+        
+        let from, to;
+        const ambient_index = SvgUtil.restrictToRange(Math.round((this.ambient - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1);
+        const target_index = SvgUtil.restrictToRange(Math.round((this._target - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1);
+        const high_index = SvgUtil.restrictToRange(Math.round((this._high - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1);
+        const low_index = SvgUtil.restrictToRange(Math.round((this._low - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1);
+        
+        let dual_state = (this.hvac_state == "heat_cool") || (this.hvac_state == "off");
+        let tick_state = this.hvac_state; // Track effective state for tick coloring
+        let tick_label;
+
+        if (this.hvac_state === 'off') {
+          tick_label = [this.ambient];
+          this._updateTemperatureSlot(null, 0, 'temperature_slot_1');
+          this._updateTemperatureSlot(this.ambient, 0, 'temperature_slot_2');
+          this._updateTemperatureSlot(null, 0, 'temperature_slot_3');
+        } else if (this.dual && dual_state) {
+          tick_label = [this._low, this._high, this.ambient].sort((a, b) => a - b);
+          // Always position: low to left of tick (-8), high to right of tick (+8)
+          // Ambient positioned based on where it falls relative to setpoints
+          if (high_index < ambient_index) {
+            // Cooling needed: ambient is highest
+            from = high_index; to = ambient_index;
+            tick_state = 'cool';
+            this._updateTemperatureSlot(this._high, 8, 'temperature_slot_2');
+            this._updateTemperatureSlot(this.ambient, -8, 'temperature_slot_3');
+          } else if (low_index > ambient_index) {
+            // Heating needed: ambient is lowest
+            from = ambient_index; to = low_index;
+            tick_state = 'heat';
+            this._updateTemperatureSlot(this.ambient, 8, 'temperature_slot_1');
+            this._updateTemperatureSlot(this._low, -8, 'temperature_slot_2');
+          } else {
+            // Ambient is between setpoints (comfort zone)
+            this._updateTemperatureSlot(this._low, -8, 'temperature_slot_1');
+            this._updateTemperatureSlot(this.ambient, 0, 'temperature_slot_2');
+            this._updateTemperatureSlot(this._high, 8, 'temperature_slot_3');
+          }
+        } else {
+          tick_label = [this._target, this.ambient].sort((a, b) => a - b);
+          this._updateTemperatureSlot(tick_label[0], -8, 'temperature_slot_1');
+          this._updateTemperatureSlot(tick_label[1], 8, 'temperature_slot_2');
+          if (this.hvac_state === 'cool' && target_index <= ambient_index) {
+            from = target_index; to = ambient_index;
+          } else if ((this.hvac_state === 'heat' || this.hvac_state === 'auto') && target_index >= ambient_index) {
+            from = ambient_index; to = target_index;
+          }
+        }
+
+        const tick_indexes = tick_label.map(item => 
+          SvgUtil.restrictToRange(Math.round((item - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 0, config.num_ticks - 1)
+        );
+        this._updateTicks(from, to, tick_indexes, tick_state);
+        this._updateText('ambient', this.ambient);
+        this._updateEdit(false);
+      }
+
+      _updateEdit(show_edit) { SvgUtil.setClass(this._root, 'dial--edit', show_edit); }
+      _updateClass(class_name, flag) { SvgUtil.setClass(this._root, class_name, flag); }
+
+      _enableControls() {
+        const config = this._config;
+        this._in_control = true;
+        this._updateClass('in_control', this.in_control);
+        if (this._timeoutHandler) clearTimeout(this._timeoutHandler);
+        this._updateEdit(true);
+        this._updateText('target', this.temperature.target);
+        this._updateText('low', this.temperature.low);
+        this._updateText('high', this.temperature.high);
+        this._timeoutHandler = setTimeout(() => {
+          this._updateText('ambient', this.ambient);
+          this._updateEdit(false);
+          this._in_control = false;
+          this._updateClass('in_control', this.in_control);
+          config.control();
+        }, config.pending * 1000);
+      }
+
+      _updateText(id, value) {
+        const lblTarget = this._root.querySelector(`#${id}`).querySelectorAll('tspan');
+        if (value) {
+          if (value % 1 != 0) lblTarget[0].textContent = Number(value).toFixed(1);
+          else lblTarget[0].textContent = Math.floor(value);
+          lblTarget[1].textContent = '';
+        }
+        if (this.in_control && id == 'target' && this.dual) lblTarget[0].textContent = '·';
+        if (id == 'title') { lblTarget[0].textContent = value; lblTarget[1].textContent = ''; }
+      }
+
+      _updateTemperatureSlot(value, offset, slot) {
+        const config = this._config;
+        const lblSlot1 = this._root.querySelector(`#${slot}`);
+        lblSlot1.textContent = value != null ? SvgUtil.superscript(value) : '';
+        const peggedValue = SvgUtil.restrictToRange(value, this.min_value, this.max_value);
+        const position = [config.radius, config.ticks_outer_radius - (config.ticks_outer_radius - config.ticks_inner_radius) / 2];
+        let degs = config.tick_degrees * (peggedValue - this.min_value) / (this.max_value - this.min_value) - config.offset_degrees + offset;
+        const pos = SvgUtil.rotatePoint(position, degs, [config.radius, config.radius]);
+        SvgUtil.attributes(lblSlot1, { x: pos[0], y: pos[1] });
+      }
+
+      _updateTicks(from, to, large_ticks, hvac_state) {
+        const config = this._config;
+        
+        // Calculate tick length and create smaller version for half-degree ticks
+        const tickLength = config.ticks_inner_radius - config.ticks_outer_radius;
+        const smallTickInner = config.ticks_outer_radius + tickLength * (2/3);
+        
+        const tickPoints = [[config.radius - 1, config.ticks_outer_radius], [config.radius + 1, config.ticks_outer_radius], [config.radius + 1, config.ticks_inner_radius], [config.radius - 1, config.ticks_inner_radius]];
+        const tickPointsSmall = [[config.radius - 1, config.ticks_outer_radius], [config.radius + 1, config.ticks_outer_radius], [config.radius + 1, smallTickInner], [config.radius - 1, smallTickInner]];
+        const tickPointsLarge = [[config.radius - 1.5, config.ticks_outer_radius], [config.radius + 1.5, config.ticks_outer_radius], [config.radius + 1.5, config.ticks_inner_radius + 20], [config.radius - 1.5, config.ticks_inner_radius + 20]];
+        this._ticks.forEach((tick, index) => {
+          let isLarge = large_ticks.includes(index);
+          let isActive = (from !== null && from !== undefined && index >= from && index <= to) ? 'active ' + hvac_state : '';
+          if (isLarge) isActive += ' large';
+          const theta = config.tick_degrees / (config.num_ticks - 1);
+          
+          // Determine if this is a half-degree tick (odd index = half degree)
+          const isHalfDegree = index % 2 === 1;
+          let points = tickPoints;
+          if (isLarge) points = tickPointsLarge;
+          else if (isHalfDegree) points = tickPointsSmall;
+          
+          SvgUtil.attributes(tick, {
+            d: SvgUtil.pointsToPath(SvgUtil.rotatePoints(points, index * theta - config.offset_degrees, [config.radius, config.radius])),
+            class: isActive
+          });
+        });
+      }
+
+      _load_icon(state, ic_name) {
+        this._main_icon.innerHTML = `<div class="climate_info"><div class="mode_color"><span class="${ic_name ? 'dot_r' : 'dot_h'}"></span></div></div>`;
+        return this._main_icon;
+      }
+
+      _buildCore(diameter) {
+        const config = this._config;
+        // Calculate the lowest point of the arc based on tick_degrees and offset_degrees
+        const startAngle = (360 - config.offset_degrees) * Math.PI / 180;
+        const endAngle = (360 - config.offset_degrees + config.tick_degrees) * Math.PI / 180;
+        const startY = config.radius * (1 - Math.cos(startAngle));
+        const endY = config.radius * (1 - Math.cos(endAngle));
+        const crossesBottom = (startAngle <= Math.PI && endAngle >= Math.PI) || 
+                              (startAngle >= Math.PI && startAngle <= endAngle);
+        const maxArcY = crossesBottom ? diameter : Math.max(startY, endY);
+        const padding = config.radius * 0.75;
+        const viewHeight = Math.min(diameter, maxArcY + padding);
+        return SvgUtil.createSVGElement('svg', { width: '100%', height: '100%', viewBox: '0 0 ' + diameter + ' ' + viewHeight, class: 'dial' });
+      }
+      _buildDial(radius) {
+        return SvgUtil.createSVGElement('circle', { cx: radius, cy: radius, r: radius, class: 'dial__shape' });
+      }
+      _buildRing(radius) {
+        const config = this._config;
+        const startAngle = 360 - config.offset_degrees;
+        const endAngle = startAngle + config.tick_degrees;
+        return SvgUtil.createSVGElement('path', { d: SvgUtil.arcDonutPath(radius, radius, radius - 4, radius - 8, startAngle, endAngle), class: 'dial__editableIndicator' });
+      }
+      _buildTicks(num_ticks) {
+        const tick_element = SvgUtil.createSVGElement('g', { class: 'dial__ticks' });
+        for (let i = 0; i < num_ticks; i++) {
+          const tick = SvgUtil.createSVGElement('path', {});
+          this._ticks.push(tick);
+          tick_element.appendChild(tick);
+        }
+        return tick_element;
+      }
+      _buildDialSlot(index) {
+        return SvgUtil.createSVGElement('text', { class: 'dial__lbl dial__lbl--ring', id: `temperature_slot_${index}` });
+      }
+      _buildText(radius, name, offset) {
+        const target = SvgUtil.createSVGElement('text', { x: radius + offset, y: radius - (name == 'title' ? radius / 2 : 0), class: `dial__lbl dial__lbl--${name}`, id: name });
+        target.appendChild(SvgUtil.createSVGElement('tspan', {}));
+        target.appendChild(SvgUtil.createSVGElement('tspan', { x: radius + radius / 3.1 + offset, y: radius - radius / 6, class: `dial__lbl--super--${name}` }));
+        return target;
+      }
+      _buildControls(radius) {
+        let startAngle = 270;
+        for (let index = 0; index < 4; index++) {
+          const angle = 90;
+          const sector = SvgUtil.anglesToSectors(radius, startAngle, angle);
+          const path = SvgUtil.createSVGElement('path', { class: 'dial__temperatureControl', fill: 'blue', d: 'M' + sector.L + ',' + sector.L + ' L' + sector.L + ',0 A' + sector.L + ',' + sector.L + ' 1 0,1 ' + sector.X + ', ' + sector.Y + ' z', transform: 'rotate(' + sector.R + ', ' + sector.L + ', ' + sector.L + ')' });
+          this._controls.push(path);
+          this._root.appendChild(path);
+          startAngle += angle;
+        }
+      }
+
+      _setupDragToSet(radius) {
+        this._isDragging = false;
+        this._dragTarget = null;
+        this._dragStartTemp = null;
+        this._dragStartAngle = null;
+        
+        const getEventPosition = (e) => e.touches?.length > 0 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+        
+        const getAngleFromPosition = (x, y) => {
+          const rect = this._root.getBoundingClientRect();
+          const dx = x - (rect.left + rect.width / 2);
+          const dy = y - (rect.top + rect.height / 2);
+          let angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+          if (angle < 0) angle += 360;
+          return angle;
+        };
+
+        const temperatureToAngle = (temp) => {
+          const config = this._config;
+          const tempRange = this.max_value - this.min_value;
+          let angle = ((temp - this.min_value) / tempRange) * config.tick_degrees;
+          angle = angle + (270 - config.offset_degrees);
+          if (angle >= 360) angle -= 360;
+          return angle;
+        };
+        
+        const angleToTemperature = (angle) => {
+          const config = this._config;
+          const startAngle = 270 - config.offset_degrees;
+          let normalizedAngle = angle - startAngle;
+          if (normalizedAngle < 0) normalizedAngle += 360;
+          if (normalizedAngle > 360) normalizedAngle -= 360;
+          if (normalizedAngle > config.tick_degrees) {
+            const distToStart = normalizedAngle > 180 ? 360 - normalizedAngle : normalizedAngle;
+            normalizedAngle = distToStart < Math.abs(normalizedAngle - config.tick_degrees) ? 0 : config.tick_degrees;
+          }
+          let temp = this.min_value + (normalizedAngle / config.tick_degrees) * (this.max_value - this.min_value);
+          temp = Math.round(temp / config.step) * config.step;
+          return SvgUtil.restrictToRange(temp, this.min_value, this.max_value);
+        };
+
+        const isClickOnSlot = (pos, slotId) => {
+          const slot = this._root.querySelector(`#${slotId}`);
+          if (!slot || !slot.textContent) return false;
+          const bbox = slot.getBoundingClientRect();
+          const padding = 20;
+          return pos.x >= bbox.left - padding && pos.x <= bbox.right + padding && 
+                 pos.y >= bbox.top - padding && pos.y <= bbox.bottom + padding;
+        };
+
+        const getSlotValue = (slotId) => {
+          const slot = this._root.querySelector(`#${slotId}`);
+          return slot ? parseFloat(slot.textContent) : NaN;
+        };
+
+        const isDualState = () => {
+          return this.dual && (this.hvac_state == 'heat_cool' || this.hvac_state == 'off');
+        };
+        
+        const handleDragStart = (e) => {
+          const pos = getEventPosition(e);
+          
+          for (const slotId of ['temperature_slot_1', 'temperature_slot_2', 'temperature_slot_3']) {
+            if (isClickOnSlot(pos, slotId)) {
+              const slotValue = getSlotValue(slotId);
+              if (isNaN(slotValue)) continue;
+              
+              if (isDualState()) {
+                if (Math.abs(slotValue - this._low) < 0.1) {
+                  this._dragTarget = 'low';
+                  this._dragStartTemp = this._low;
+                } else if (Math.abs(slotValue - this._high) < 0.1) {
+                  this._dragTarget = 'high';
+                  this._dragStartTemp = this._high;
+                } else {
+                  continue;
+                }
+              } else {
+                if (Math.abs(slotValue - this._target) < 0.1) {
+                  this._dragTarget = 'target';
+                  this._dragStartTemp = this._target;
+                } else {
+                  continue;
+                }
+              }
+              
+              this._dragStartAngle = getAngleFromPosition(pos.x, pos.y);
+              this._isDragging = true;
+              this._enableControls();
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+          }
+        };
+        
+        const handleDragMove = (e) => {
+          if (!this._isDragging || !this._dragTarget) return;
+          
+          // Reset the timeout while dragging
+          this._enableControls();
+          
+          const pos = getEventPosition(e);
+          const currentAngle = getAngleFromPosition(pos.x, pos.y);
+          
+          let angleDelta = currentAngle - this._dragStartAngle;
+          if (angleDelta > 180) angleDelta -= 360;
+          if (angleDelta < -180) angleDelta += 360;
+          
+          const startTempAngle = temperatureToAngle(this._dragStartTemp);
+          let newAngle = startTempAngle + angleDelta;
+          if (newAngle < 0) newAngle += 360;
+          if (newAngle >= 360) newAngle -= 360;
+          
+          const temp = angleToTemperature(newAngle);
+          const config = this._config;
+
+          // Helper to calculate tick index from temperature
+          const tempToTickIndex = (t) => SvgUtil.restrictToRange(
+            Math.round((t - this.min_value) / (this.max_value - this.min_value) * (config.num_ticks - 1)), 
+            0, config.num_ticks - 1
+          );
+          
+          if (this._dragTarget === 'target') {
+            this._target = temp;
+            this._updateText('target', this._target);
+            const temps = [this._target, this._ambient].sort((a, b) => a - b);
+            this._updateTemperatureSlot(temps[0], -8, 'temperature_slot_1');
+            this._updateTemperatureSlot(temps[1], 8, 'temperature_slot_2');
+            
+            // Update arc segment
+            const target_index = tempToTickIndex(this._target);
+            const ambient_index = tempToTickIndex(this._ambient);
+            let from = null, to = null;
+            if (this.hvac_state === 'cool' && target_index <= ambient_index) {
+              from = target_index; to = ambient_index;
+            } else if ((this.hvac_state === 'heat' || this.hvac_state === 'auto') && target_index >= ambient_index) {
+              from = ambient_index; to = target_index;
+            }
+            const tick_indexes = temps.map(t => tempToTickIndex(t));
+            this._updateTicks(from, to, tick_indexes, this.hvac_state);
+          } else if (this._dragTarget === 'low') {
+            this._low = Math.min(temp, this._high - config.idle_zone);
+            this._updateText('low', this._low);
+            // Update all 3 slots based on sorted positions
+            const temps = [this._low, this._high, this._ambient].sort((a, b) => a - b);
+            this._updateTemperatureSlot(temps[0], -8, 'temperature_slot_1');
+            this._updateTemperatureSlot(temps[1], 0, 'temperature_slot_2');
+            this._updateTemperatureSlot(temps[2], 8, 'temperature_slot_3');
+            
+            // Update arc segment
+            const low_index = tempToTickIndex(this._low);
+            const high_index = tempToTickIndex(this._high);
+            const ambient_index = tempToTickIndex(this._ambient);
+            let from = null, to = null;
+            let tick_state = this.hvac_state;
+            if (high_index < ambient_index) {
+              from = high_index; to = ambient_index;
+              tick_state = 'cool';
+            } else if (low_index > ambient_index) {
+              from = ambient_index; to = low_index;
+              tick_state = 'heat';
+            }
+            const tick_indexes = temps.map(t => tempToTickIndex(t));
+            this._updateTicks(from, to, tick_indexes, tick_state);
+          } else if (this._dragTarget === 'high') {
+            this._high = Math.max(temp, this._low + config.idle_zone);
+            this._updateText('high', this._high);
+            // Update all 3 slots based on sorted positions
+            const temps = [this._low, this._high, this._ambient].sort((a, b) => a - b);
+            this._updateTemperatureSlot(temps[0], -8, 'temperature_slot_1');
+            this._updateTemperatureSlot(temps[1], 0, 'temperature_slot_2');
+            this._updateTemperatureSlot(temps[2], 8, 'temperature_slot_3');
+            
+            // Update arc segment
+            const low_index = tempToTickIndex(this._low);
+            const high_index = tempToTickIndex(this._high);
+            const ambient_index = tempToTickIndex(this._ambient);
+            let from = null, to = null;
+            let tick_state = this.hvac_state;
+            if (high_index < ambient_index) {
+              from = high_index; to = ambient_index;
+              tick_state = 'cool';
+            } else if (low_index > ambient_index) {
+              from = ambient_index; to = low_index;
+              tick_state = 'heat';
+            }
+            const tick_indexes = temps.map(t => tempToTickIndex(t));
+            this._updateTicks(from, to, tick_indexes, tick_state);
+          }
+          e.preventDefault();
+        };
+        
+        const handleDragEnd = () => {
+          this._isDragging = false;
+          this._dragTarget = null;
+          this._dragStartTemp = null;
+          this._dragStartAngle = null;
+        };
+        
+        this._root.addEventListener('mousedown', handleDragStart);
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('mouseup', handleDragEnd);
+        this._root.addEventListener('touchstart', handleDragStart, { passive: false });
+        document.addEventListener('touchmove', handleDragMove, { passive: false });
+        document.addEventListener('touchend', handleDragEnd);
+      }
+    }
+
+    // ============ TEST HARNESS ============
+    const config = {
+      title: 'Living Room',
+      diameter: 400,
+      radius: 200,
+      pending: 3,
+      idle_zone: 2,
+      step: 0.5,
+      num_ticks: 51,
+      tick_degrees: 180,
+      ticks_outer_radius: 400 / 30,
+      ticks_inner_radius: 400 / 8,
+      offset_degrees: 180 - (360 - 180) / 2,
+      control: () => { updateStatus(); console.log('Temperature saved:', thermostat.temperature); },
+      propWin: () => {}
+    };
+
+    const thermostat = new ThermostatUI(config);
+    document.getElementById('thermostat-mount').appendChild(thermostat.container);
+
+    let currentState = {
+      ambient_temperature: 21, target_temperature: 22,
+      target_temperature_low: null, target_temperature_high: null,
+      hvac_state: 'heat', min_value: 10, max_value: 35,
+      entity: { entity_id: 'climate.test' }
+    };
+
+    function updateThermostat() { thermostat.updateState(currentState, {}); updateStatus(); }
+    function updateStatus() {
+      document.getElementById('status-target').textContent = thermostat.temperature.target?.toFixed(1) || '--';
+      document.getElementById('status-low').textContent = thermostat.temperature.low?.toFixed(1) || '--';
+      document.getElementById('status-high').textContent = thermostat.temperature.high?.toFixed(1) || '--';
+      document.getElementById('status-mode').textContent = currentState.hvac_state;
+    }
+
+    updateThermostat();
+
+    document.getElementById('hvac-mode').addEventListener('change', (e) => {
+      currentState.hvac_state = e.target.value;
+      // Set dual mode values only for heat_cool mode
+      if (e.target.value === 'heat_cool') {
+        currentState.target_temperature_low = 18;
+        currentState.target_temperature_high = 24;
+        currentState.target_temperature = null;
+      } else {
+        currentState.target_temperature_low = null;
+        currentState.target_temperature_high = null;
+        currentState.target_temperature = 22;
+      }
+      thermostat._dual = (e.target.value === 'heat_cool');
+      updateThermostat();
+    });
+    document.getElementById('ambient-temp').addEventListener('input', (e) => {
+      currentState.ambient_temperature = parseFloat(e.target.value);
+      document.getElementById('ambient-value').textContent = e.target.value;
+      updateThermostat();
+    });
+
+    window.thermostat = thermostat;
+  </script>
+</body>
+</html>
